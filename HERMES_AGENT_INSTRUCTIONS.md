@@ -56,6 +56,8 @@ The server has three main concepts:
 
 Logged meal entries store snapshots. If a food or recipe is updated later, old logs do not change.
 
+Tracked nutrients are calories, protein, carbs, fat, fiber, sugars, saturated fat, and salt. Salt is `salt_g` from labels in grams, not sodium in milligrams. If a label only gives sodium, ask before storing it or convert sodium to salt explicitly.
+
 ## Tool Use Principles
 
 Before logging a vague food, search first:
@@ -86,7 +88,7 @@ Use `add_food` when the user gives macros for a standalone food.
 Example user message:
 
 ```text
-Add Babybel. One piece is 70 kcal, 5g protein, 0g carbs, 5g fat. Alias babybel.
+Add Babybel. One piece is 70 kcal, 4g protein, 0g carbs, 5g fat. Alias babybel.
 ```
 
 Tool call:
@@ -96,11 +98,24 @@ Tool call:
   "name": "Babybel",
   "serving_name": "1 piece",
   "kcal": 70,
-  "protein_g": 5,
+  "protein_g": 4,
   "carbs_g": 0,
   "fat_g": 5,
   "fiber_g": 0,
+  "sugars_g": 0,
+  "saturated_fat_g": 0,
+  "salt_g": 0,
   "aliases": ["babybel"]
+}
+```
+
+When a label includes sugars, saturated fat, or salt, pass them as:
+
+```json
+{
+  "sugars_g": 0.7,
+  "saturated_fat_g": 16.8,
+  "salt_g": 1.4
 }
 ```
 
@@ -120,6 +135,9 @@ Example:
   "carbs_g": 0,
   "fat_g": 1,
   "fiber_g": 0,
+  "sugars_g": 0,
+  "saturated_fat_g": 0,
+  "salt_g": 0,
   "aliases": ["default tuna", "tuna"]
 }
 ```
@@ -345,7 +363,7 @@ Be concise. Confirm logged foods with totals when useful.
 Good response after logging:
 
 ```text
-Logged: 2 Babybel. Today so far: 140 kcal, 10.0g protein, 0.0g carbs, 10.0g fat.
+Logged: 2 Babybel. Today so far: 140 kcal, 8.0g protein, 0.0g carbs, 10.0g fat.
 ```
 
 For recipes, mention adjustments:

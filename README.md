@@ -25,6 +25,8 @@ Recipes can be logged with one-off adjustments. For example, after creating a `t
 
 The logged meal stores macro snapshots and a component snapshot, so historical logs do not change when you later edit a food or recipe.
 
+Tracked nutrients are calories, protein, carbs, fat, fiber, sugars, saturated fat, and salt. Salt is stored as grams of salt from nutrition labels, not sodium in milligrams.
+
 ## MCP Endpoint
 
 - URL: `http://HOST:8765/mcp`
@@ -119,9 +121,13 @@ After the server is running, add demo foods through MCP:
   "name": "Babybel",
   "serving_name": "1 piece",
   "kcal": 70,
-  "protein_g": 5,
+  "protein_g": 4,
   "carbs_g": 0,
   "fat_g": 5,
+  "fiber_g": 0,
+  "sugars_g": 0,
+  "saturated_fat_g": 0,
+  "salt_g": 0,
   "aliases": ["babybel"]
 }
 ```
@@ -134,6 +140,10 @@ After the server is running, add demo foods through MCP:
   "protein_g": 20,
   "carbs_g": 8,
   "fat_g": 4,
+  "fiber_g": 0,
+  "sugars_g": 0,
+  "saturated_fat_g": 0,
+  "salt_g": 0,
   "aliases": ["greek yogurt"]
 }
 ```
@@ -157,7 +167,7 @@ Example recipe ingredients use grams when the food has `grams_per_serving`:
 Build:
 
 ```bash
-docker build -t nutrition-mcp:0.2.0 .
+docker build -t nutrition-mcp:0.3.0 .
 ```
 
 Run:
@@ -170,7 +180,7 @@ docker run -d \
   -e MCP_TOKEN=change-me \
   -e PUBLIC_HOSTS=192.168.1.142,nutrition-mcp \
   -v /mnt/user/appdata/nutrition-mcp:/data \
-  nutrition-mcp:0.2.0
+  nutrition-mcp:0.3.0
 ```
 
 For a published image:
@@ -183,13 +193,13 @@ docker run -d \
   -e MCP_TOKEN=change-me \
   -e PUBLIC_HOSTS=192.168.1.142,nutrition-mcp \
   -v /mnt/user/appdata/nutrition-mcp:/data \
-  ghcr.io/REPLACE_ME/nutrition-mcp:0.2.0
+  ghcr.io/REPLACE_ME/nutrition-mcp:0.3.0
 ```
 
 ## Unraid Add Container
 
 - Name: `nutrition-mcp`
-- Repository: `ghcr.io/REPLACE_ME/nutrition-mcp:0.2.0`
+- Repository: `ghcr.io/REPLACE_ME/nutrition-mcp:0.3.0`
 - Network Type: `bridge`
 - Port: host `8765` -> container `8765` TCP
 - Path: `/mnt/user/appdata/nutrition-mcp` -> `/data`

@@ -24,7 +24,7 @@ def seeded_service(service: NutritionService) -> NutritionService:
         name="Babybel",
         serving_name="1 piece",
         kcal=70,
-        protein_g=5,
+        protein_g=4,
         carbs_g=0,
         fat_g=5,
         aliases=["babybel"],
@@ -39,4 +39,3 @@ def seeded_service(service: NutritionService) -> NutritionService:
         aliases=["greek yogurt"],
     )
     return service
-

@@ -35,8 +35,11 @@ def write_daily_exports(
                 f"- kcal: {round(totals['kcal'])}\n"
                 f"- protein: {totals['protein_g']:.1f}g\n"
                 f"- carbs: {totals['carbs_g']:.1f}g\n"
+                f"- sugars: {totals['sugars_g']:.1f}g\n"
                 f"- fat: {totals['fat_g']:.1f}g\n"
-                f"- fiber: {totals['fiber_g']:.1f}g"
+                f"- saturated fat: {totals['saturated_fat_g']:.1f}g\n"
+                f"- fiber: {totals['fiber_g']:.1f}g\n"
+                f"- salt: {totals['salt_g']:.1f}g"
             ),
             f"Generated at: {generated_at}",
         ]
@@ -57,8 +60,11 @@ def write_daily_exports(
                 "kcal",
                 "protein_g",
                 "carbs_g",
+                "sugars_g",
                 "fat_g",
+                "saturated_fat_g",
                 "fiber_g",
+                "salt_g",
                 "note",
             ],
         )
@@ -76,8 +82,11 @@ def write_daily_exports(
                     "kcal": entry["kcal_snapshot"],
                     "protein_g": entry["protein_snapshot"],
                     "carbs_g": entry["carbs_snapshot"],
+                    "sugars_g": entry["sugars_snapshot"],
                     "fat_g": entry["fat_snapshot"],
+                    "saturated_fat_g": entry["saturated_fat_snapshot"],
                     "fiber_g": entry["fiber_snapshot"],
+                    "salt_g": entry["salt_snapshot"],
                     "note": entry["note"],
                 }
             )
@@ -87,8 +96,11 @@ def write_daily_exports(
                 "kcal": totals["kcal"],
                 "protein_g": totals["protein_g"],
                 "carbs_g": totals["carbs_g"],
+                "sugars_g": totals["sugars_g"],
                 "fat_g": totals["fat_g"],
+                "saturated_fat_g": totals["saturated_fat_g"],
                 "fiber_g": totals["fiber_g"],
+                "salt_g": totals["salt_g"],
             }
         )
 

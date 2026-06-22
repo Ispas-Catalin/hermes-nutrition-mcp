@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from app.config import Settings
 
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -46,7 +46,13 @@ def initialize_database(settings: Settings) -> None:
     with transaction(settings) as conn:
         _create_schema(conn)
         _ensure_column(conn, "aliases", "recipe_id", "INTEGER REFERENCES recipes(id)")
+        _ensure_column(conn, "foods", "sugars_g", "REAL DEFAULT 0")
+        _ensure_column(conn, "foods", "saturated_fat_g", "REAL DEFAULT 0")
+        _ensure_column(conn, "foods", "salt_g", "REAL DEFAULT 0")
         _ensure_column(conn, "meal_entries", "recipe_id", "INTEGER REFERENCES recipes(id)")
+        _ensure_column(conn, "meal_entries", "sugars_snapshot", "REAL NOT NULL DEFAULT 0")
+        _ensure_column(conn, "meal_entries", "saturated_fat_snapshot", "REAL NOT NULL DEFAULT 0")
+        _ensure_column(conn, "meal_entries", "salt_snapshot", "REAL NOT NULL DEFAULT 0")
         _ensure_column(conn, "meal_entries", "recipe_components_snapshot", "TEXT")
         conn.execute(
             """
@@ -72,6 +78,9 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             carbs_g REAL NOT NULL,
             fat_g REAL NOT NULL,
             fiber_g REAL DEFAULT 0,
+            sugars_g REAL DEFAULT 0,
+            saturated_fat_g REAL DEFAULT 0,
+            salt_g REAL DEFAULT 0,
             source TEXT DEFAULT 'manual',
             notes TEXT,
             created_at TEXT NOT NULL,
@@ -129,6 +138,9 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             carbs_snapshot REAL NOT NULL,
             fat_snapshot REAL NOT NULL,
             fiber_snapshot REAL NOT NULL DEFAULT 0,
+            sugars_snapshot REAL NOT NULL DEFAULT 0,
+            saturated_fat_snapshot REAL NOT NULL DEFAULT 0,
+            salt_snapshot REAL NOT NULL DEFAULT 0,
             recipe_components_snapshot TEXT,
             note TEXT,
             raw_message TEXT,
@@ -167,4 +179,3 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition
     columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-

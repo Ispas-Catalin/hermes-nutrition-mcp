@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>nutrition-mcp</Name>
-  <Repository>ghcr.io/REPLACE_ME/nutrition-mcp:0.2.0</Repository>
+  <Repository>ghcr.io/REPLACE_ME/nutrition-mcp:0.3.0</Repository>
   <Registry>https://ghcr.io</Registry>
   <Network>bridge</Network>
   <Privileged>false</Privileged>

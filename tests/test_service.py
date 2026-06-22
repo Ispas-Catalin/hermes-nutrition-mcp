@@ -18,16 +18,20 @@ def test_database_initialization(settings) -> None:
             row["name"]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
+        food_columns = {row["name"] for row in conn.execute("PRAGMA table_info(foods)")}
+        entry_columns = {row["name"] for row in conn.execute("PRAGMA table_info(meal_entries)")}
     assert "foods" in tables
     assert "recipes" in tables
     assert "meal_entries" in tables
+    assert {"sugars_g", "saturated_fat_g", "salt_g"} <= food_columns
+    assert {"sugars_snapshot", "saturated_fat_snapshot", "salt_snapshot"} <= entry_columns
 
 
 def test_add_food(service: NutritionService) -> None:
     result = service.add_food(
         name="Babybel",
         kcal=70,
-        protein_g=5,
+        protein_g=4,
         carbs_g=0,
         fat_g=5,
         serving_name="1 piece",
@@ -56,7 +60,7 @@ def test_log_food_by_alias(seeded_service: NutritionService) -> None:
     result = seeded_service.log_food(alias="babybel", quantity=2, date="2026-06-22", time="10:00")
     entry = result["entry"]
     assert entry["kcal_snapshot"] == 140
-    assert result["day"]["totals"]["protein_g"] == 10
+    assert result["day"]["totals"]["protein_g"] == 8
     assert "Babybel" in result["day"]["table"]
 
 
@@ -85,7 +89,7 @@ def test_get_day_totals(seeded_service: NutritionService) -> None:
     seeded_service.log_food(alias="greek yogurt", quantity=1, date="2026-06-22", time="11:00")
     day = seeded_service.get_day(date="2026-06-22")
     assert day["totals"]["kcal"] == 320
-    assert day["totals"]["protein_g"] == 30
+    assert day["totals"]["protein_g"] == 28
 
 
 def test_get_entries_range(seeded_service: NutritionService) -> None:
@@ -150,6 +154,38 @@ def test_finalize_day_exports(seeded_service: NutritionService) -> None:
     json_path = seeded_service.settings.exports_dir / "json" / "2026-06-22.json"
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["totals"]["kcal"] == 140
+    assert payload["totals"]["sugars_g"] == 0
+
+
+def test_new_nutrients_are_logged_and_exported(service: NutritionService) -> None:
+    service.add_food(
+        name="Pizza label slice",
+        serving_name="1 slice",
+        kcal=500,
+        protein_g=25,
+        carbs_g=60,
+        fat_g=20,
+        fiber_g=3,
+        sugars_g=0.7,
+        saturated_fat_g=16.8,
+        salt_g=1.4,
+        aliases=["pizza slice"],
+    )
+    result = service.log_food(alias="pizza slice", quantity=1, date="2026-06-22")
+    entry = result["entry"]
+    assert entry["sugars_snapshot"] == pytest.approx(0.7)
+    assert entry["saturated_fat_snapshot"] == pytest.approx(16.8)
+    assert entry["salt_snapshot"] == pytest.approx(1.4)
+    assert result["day"]["totals"]["sugars_g"] == pytest.approx(0.7)
+    assert result["day"]["totals"]["saturated_fat_g"] == pytest.approx(16.8)
+    assert result["day"]["totals"]["salt_g"] == pytest.approx(1.4)
+    assert "SatFat" in result["day"]["table"]
+    exported = service.finalize_day(date="2026-06-22")
+    json_path = service.settings.exports_dir / "json" / "2026-06-22.json"
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["totals"]["salt_g"] == pytest.approx(1.4)
+    csv_path = exported["paths"]["csv_path"]
+    assert "saturated_fat_g" in open(csv_path, encoding="utf-8").read()
 
 
 def test_food_grams_logging(service: NutritionService) -> None:

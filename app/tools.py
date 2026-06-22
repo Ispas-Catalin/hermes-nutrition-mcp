@@ -11,7 +11,16 @@ from app.exports import utc_timestamp, write_daily_exports
 from app.tables import ascii_table, build_totals, daily_totals_table, foods_table, normalize_alias
 
 
-MACRO_FIELDS = ("kcal", "protein_g", "carbs_g", "fat_g", "fiber_g")
+MACRO_FIELDS = (
+    "kcal",
+    "protein_g",
+    "carbs_g",
+    "fat_g",
+    "fiber_g",
+    "sugars_g",
+    "saturated_fat_g",
+    "salt_g",
+)
 
 
 class NutritionService:
@@ -30,6 +39,9 @@ class NutritionService:
         brand: str | None = None,
         grams_per_serving: float | None = None,
         fiber_g: float = 0,
+        sugars_g: float = 0,
+        saturated_fat_g: float = 0,
+        salt_g: float = 0,
         source: str = "manual",
         notes: str | None = None,
         aliases: list[str] | None = None,
@@ -41,17 +53,18 @@ class NutritionService:
         _validate_positive(default_quantity, "default_quantity")
         if grams_per_serving is not None:
             _validate_positive(grams_per_serving, "grams_per_serving")
-        _validate_macros(kcal, protein_g, carbs_g, fat_g, fiber_g)
+        _validate_macros(kcal, protein_g, carbs_g, fat_g, fiber_g, sugars_g, saturated_fat_g, salt_g)
         created_at = now_iso(self.settings.timezone)
         with transaction(self.settings) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO foods(
                     name, brand, serving_name, grams_per_serving, kcal,
-                    protein_g, carbs_g, fat_g, fiber_g, source, notes,
+                    protein_g, carbs_g, fat_g, fiber_g, sugars_g,
+                    saturated_fat_g, salt_g, source, notes,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     name,
@@ -63,6 +76,9 @@ class NutritionService:
                     carbs_g,
                     fat_g,
                     fiber_g,
+                    sugars_g,
+                    saturated_fat_g,
+                    salt_g,
                     source,
                     notes,
                     created_at,
@@ -89,6 +105,9 @@ class NutritionService:
         brand: str | None = None,
         grams_per_serving: float | None = None,
         fiber_g: float | None = None,
+        sugars_g: float | None = None,
+        saturated_fat_g: float | None = None,
+        salt_g: float | None = None,
         source: str | None = None,
         notes: str | None = None,
     ) -> dict[str, Any]:
@@ -103,6 +122,9 @@ class NutritionService:
             "carbs_g": carbs_g,
             "fat_g": fat_g,
             "fiber_g": fiber_g,
+            "sugars_g": sugars_g,
+            "saturated_fat_g": saturated_fat_g,
+            "salt_g": salt_g,
             "source": source,
             "notes": notes,
         }.items():
@@ -332,9 +354,10 @@ class NutritionService:
                     date, time, food_id, alias_used, food_name_snapshot,
                     brand_snapshot, serving_name_snapshot, quantity, kcal_snapshot,
                     protein_snapshot, carbs_snapshot, fat_snapshot, fiber_snapshot,
+                    sugars_snapshot, saturated_fat_snapshot, salt_snapshot,
                     note, raw_message, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     date_value,
@@ -350,6 +373,9 @@ class NutritionService:
                     macros["carbs_g"],
                     macros["fat_g"],
                     macros["fiber_g"],
+                    macros["sugars_g"],
+                    macros["saturated_fat_g"],
+                    macros["salt_g"],
                     note,
                     raw_message,
                     created_at,
@@ -392,9 +418,10 @@ class NutritionService:
                     date, time, recipe_id, alias_used, food_name_snapshot,
                     serving_name_snapshot, quantity, kcal_snapshot, protein_snapshot,
                     carbs_snapshot, fat_snapshot, fiber_snapshot,
+                    sugars_snapshot, saturated_fat_snapshot, salt_snapshot,
                     recipe_components_snapshot, note, raw_message, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     date_value,
@@ -409,6 +436,9 @@ class NutritionService:
                     totals["carbs_g"],
                     totals["fat_g"],
                     totals["fiber_g"],
+                    totals["sugars_g"],
+                    totals["saturated_fat_g"],
+                    totals["salt_g"],
                     json.dumps(snapshot, ensure_ascii=False),
                     note,
                     raw_message,
@@ -517,6 +547,9 @@ class NutritionService:
                         "carbs_g": float(entry["carbs_snapshot"]) * ratio,
                         "fat_g": float(entry["fat_snapshot"]) * ratio,
                         "fiber_g": float(entry["fiber_snapshot"]) * ratio,
+                        "sugars_g": float(entry["sugars_snapshot"]) * ratio,
+                        "saturated_fat_g": float(entry["saturated_fat_snapshot"]) * ratio,
+                        "salt_g": float(entry["salt_snapshot"]) * ratio,
                     }
                 updates.update(
                     {
@@ -526,6 +559,9 @@ class NutritionService:
                         "carbs_snapshot": macros["carbs_g"],
                         "fat_snapshot": macros["fat_g"],
                         "fiber_snapshot": macros["fiber_g"],
+                        "sugars_snapshot": macros["sugars_g"],
+                        "saturated_fat_snapshot": macros["saturated_fat_g"],
+                        "salt_snapshot": macros["salt_g"],
                     }
                 )
             if note is not None:
@@ -855,7 +891,8 @@ def _recipe_components(conn: sqlite3.Connection, recipe_id: int) -> list[dict[st
     rows = conn.execute(
         """
         SELECT ri.*, f.name, f.brand, f.serving_name, f.grams_per_serving,
-               f.kcal, f.protein_g, f.carbs_g, f.fat_g, f.fiber_g
+               f.kcal, f.protein_g, f.carbs_g, f.fat_g, f.fiber_g,
+               f.sugars_g, f.saturated_fat_g, f.salt_g
         FROM recipe_items ri
         JOIN foods f ON f.id = ri.food_id
         WHERE ri.recipe_id = ?
@@ -916,6 +953,9 @@ def _apply_adjustments(
             "carbs_g": food["carbs_g"],
             "fat_g": food["fat_g"],
             "fiber_g": food["fiber_g"],
+            "sugars_g": food["sugars_g"],
+            "saturated_fat_g": food["saturated_fat_g"],
+            "salt_g": food["salt_g"],
         }
         base["quantity"] = new_quantity
         if adjustment.get("note") is not None:
@@ -928,11 +968,8 @@ def _components_totals(components: list[dict[str, Any]], multiplier: float = 1) 
     totals = {field: 0.0 for field in MACRO_FIELDS}
     for component in components:
         quantity = float(component["quantity"]) * multiplier
-        totals["kcal"] += float(component["kcal"]) * quantity
-        totals["protein_g"] += float(component["protein_g"]) * quantity
-        totals["carbs_g"] += float(component["carbs_g"]) * quantity
-        totals["fat_g"] += float(component["fat_g"]) * quantity
-        totals["fiber_g"] += float(component["fiber_g"]) * quantity
+        for field in MACRO_FIELDS:
+            totals[field] += float(component[field]) * quantity
     return totals
 
 
@@ -1019,13 +1056,7 @@ def _entry_to_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def _food_macros(food: dict[str, Any], quantity: float) -> dict[str, float]:
-    return {
-        "kcal": float(food["kcal"]) * quantity,
-        "protein_g": float(food["protein_g"]) * quantity,
-        "carbs_g": float(food["carbs_g"]) * quantity,
-        "fat_g": float(food["fat_g"]) * quantity,
-        "fiber_g": float(food["fiber_g"]) * quantity,
-    }
+    return {field: float(food[field]) * quantity for field in MACRO_FIELDS}
 
 
 def _quantity_from_inputs(
@@ -1060,13 +1091,25 @@ def _validate_positive(value: float, field: str) -> None:
         raise ValueError(f"{field} must be greater than 0.")
 
 
-def _validate_macros(kcal: float, protein_g: float, carbs_g: float, fat_g: float, fiber_g: float) -> None:
+def _validate_macros(
+    kcal: float,
+    protein_g: float,
+    carbs_g: float,
+    fat_g: float,
+    fiber_g: float,
+    sugars_g: float,
+    saturated_fat_g: float,
+    salt_g: float,
+) -> None:
     for field, value in {
         "kcal": kcal,
         "protein_g": protein_g,
         "carbs_g": carbs_g,
         "fat_g": fat_g,
         "fiber_g": fiber_g,
+        "sugars_g": sugars_g,
+        "saturated_fat_g": saturated_fat_g,
+        "salt_g": salt_g,
     }.items():
         if float(value) < 0:
             raise ValueError(f"{field} must be greater than or equal to 0.")
