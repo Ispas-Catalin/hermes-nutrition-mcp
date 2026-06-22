@@ -1,0 +1,15 @@
+services:
+  nutrition-mcp:
+    build: .
+    container_name: nutrition-mcp
+    ports:
+      - "8765:8765"
+    environment:
+      DATA_DIR: /data
+      TZ: Europe/Bucharest
+      MCP_TOKEN: change-me
+      HOST: 0.0.0.0
+      PORT: 8765
+    volumes:
+      - ./data:/data
+

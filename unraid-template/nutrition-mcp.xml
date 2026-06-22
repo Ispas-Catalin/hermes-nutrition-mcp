@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>nutrition-mcp</Name>
+  <Repository>ghcr.io/REPLACE_ME/nutrition-mcp:0.1.0</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>Local-first nutrition tracker HTTP MCP server for Hermes.</Overview>
+  <Category>Productivity:</Category>
+  <WebUI>http://[IP]:[PORT:8765]/</WebUI>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI" Target="8765" Default="8765" Mode="tcp" Description="HTTP MCP server port" Type="Port" Display="always" Required="true" Mask="false">8765</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/nutrition-mcp" Mode="rw" Description="SQLite database and exports" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/nutrition-mcp</Config>
+  <Config Name="Timezone" Target="TZ" Default="Europe/Bucharest" Mode="" Description="Timezone" Type="Variable" Display="always" Required="true" Mask="false">Europe/Bucharest</Config>
+  <Config Name="MCP Token" Target="MCP_TOKEN" Default="" Mode="" Description="Bearer token required by Hermes" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+</Container>
+
