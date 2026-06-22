@@ -4,6 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DATA_DIR=/data \
     TZ=Europe/Bucharest \
+    PUBLIC_HOSTS=192.168.1.142,nutrition-mcp \
     HOST=0.0.0.0 \
     PORT=8765
 
@@ -24,4 +25,3 @@ USER nutrition
 EXPOSE 8765
 
 CMD ["python", "-m", "app.main"]
-

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date as Date, datetime, timedelta
 from typing import Any
 
 from app.config import Settings
 from app.db import SCHEMA_VERSION, initialize_database, local_now, now_iso, transaction
 from app.exports import utc_timestamp, write_daily_exports
-from app.tables import ascii_table, build_totals, normalize_alias
+from app.tables import ascii_table, build_totals, daily_totals_table, foods_table, normalize_alias
 
 
 MACRO_FIELDS = ("kcal", "protein_g", "carbs_g", "fat_g", "fiber_g")
@@ -164,6 +164,43 @@ class NutritionService:
                 (needle, needle, needle, limit),
             ).fetchall()
             return {"foods": [_food_with_aliases(conn, row["id"]) for row in rows]}
+
+    def get_food(self, food_id: int | None = None, alias: str | None = None) -> dict[str, Any]:
+        with transaction(self.settings) as conn:
+            food, alias_row = _resolve_food(conn, food_id=food_id, alias=alias)
+            result = _food_with_aliases(conn, food["id"])
+            return {
+                "food": result,
+                "matched_alias": dict(alias_row) if alias_row is not None else None,
+            }
+
+    def list_foods(self, query: str | None = None, limit: int = 50) -> dict[str, Any]:
+        limit = _clean_limit(limit, 1, 200)
+        params: list[Any] = []
+        where = ""
+        if query:
+            where = """
+            WHERE lower(f.name) LIKE ?
+               OR lower(coalesce(f.brand, '')) LIKE ?
+               OR a.normalized_alias LIKE ?
+            """
+            needle = f"%{query.strip().lower()}%"
+            params.extend([needle, needle, needle])
+        params.append(limit)
+        with transaction(self.settings) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT DISTINCT f.*
+                FROM foods f
+                LEFT JOIN aliases a ON a.food_id = f.id
+                {where}
+                ORDER BY lower(f.name), f.id
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+            foods = [_food_with_aliases(conn, row["id"]) for row in rows]
+            return {"foods": foods, "table": foods_table(foods)}
 
     def add_recipe(
         self,
@@ -387,6 +424,39 @@ class NutritionService:
         with transaction(self.settings) as conn:
             return self._get_day_with_conn(conn, date_value)
 
+    def get_entries(
+        self,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        from_value, to_value = self._date_range(from_date, to_date)
+        limit = _clean_limit(limit, 1, 2000)
+        with transaction(self.settings) as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM meal_entries
+                WHERE date BETWEEN ? AND ?
+                ORDER BY date, time, id
+                LIMIT ?
+                """,
+                (from_value, to_value, limit + 1),
+            ).fetchall()
+            entries = [_entry_to_dict(row) for row in rows[:limit]]
+            days = self._days_with_entries(conn, from_value, to_value)
+            totals = build_totals(entries)
+            return {
+                "from_date": from_value,
+                "to_date": to_value,
+                "entries": entries,
+                "totals": totals,
+                "days": days,
+                "table": ascii_table(entries, totals),
+                "daily_table": daily_totals_table(days),
+                "truncated": len(rows) > limit,
+            }
+
     def delete_entry(self, entry_id: int) -> dict[str, Any]:
         with transaction(self.settings) as conn:
             entry = _get_entry(conn, entry_id)
@@ -395,6 +465,35 @@ class NutritionService:
                 "deleted_entry_id": entry_id,
                 "day": self._get_day_with_conn(conn, entry["date"]),
             }
+
+    def delete_food(self, food_id: int) -> dict[str, Any]:
+        with transaction(self.settings) as conn:
+            food = _food_with_aliases(conn, food_id)
+            meal_count = _count_rows(conn, "meal_entries", "food_id", food_id)
+            recipe_count = _count_rows(conn, "recipe_items", "food_id", food_id)
+            if meal_count:
+                raise ValueError(
+                    f"Food id {food_id} has {meal_count} logged entries and cannot be deleted."
+                )
+            if recipe_count:
+                raise ValueError(
+                    f"Food id {food_id} is used in {recipe_count} recipe items and cannot be deleted."
+                )
+            conn.execute("DELETE FROM aliases WHERE food_id = ?", (food_id,))
+            conn.execute("DELETE FROM foods WHERE id = ?", (food_id,))
+            return {"deleted_food": food}
+
+    def delete_recipe(self, recipe_id: int) -> dict[str, Any]:
+        with transaction(self.settings) as conn:
+            recipe = _recipe_with_items(conn, recipe_id)
+            meal_count = _count_rows(conn, "meal_entries", "recipe_id", recipe_id)
+            if meal_count:
+                raise ValueError(
+                    f"Recipe id {recipe_id} has {meal_count} logged entries and cannot be deleted."
+                )
+            conn.execute("DELETE FROM aliases WHERE recipe_id = ?", (recipe_id,))
+            conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
+            return {"deleted_recipe": recipe}
 
     def update_entry(
         self,
@@ -474,6 +573,34 @@ class NutritionService:
             )
             return {"date": date_value, "paths": paths, "day": day}
 
+    def get_weekly_report(self, date: str | None = None) -> dict[str, Any]:
+        anchor = self._date_value(date)
+        start = anchor - timedelta(days=anchor.weekday())
+        end = start + timedelta(days=6)
+        from_value = start.isoformat()
+        to_value = end.isoformat()
+        with transaction(self.settings) as conn:
+            days = self._days_with_entries(conn, from_value, to_value)
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM meal_entries
+                WHERE date BETWEEN ? AND ?
+                ORDER BY date, time, id
+                """,
+                (from_value, to_value),
+            ).fetchall()
+            entries = [_entry_to_dict(row) for row in rows]
+            totals = build_totals(entries)
+            return {
+                "week_start": from_value,
+                "week_end": to_value,
+                "entries": entries,
+                "days": days,
+                "totals": totals,
+                "daily_table": daily_totals_table(days, total_label="WEEK"),
+            }
+
     def list_aliases(self, query: str | None = None, limit: int = 50) -> dict[str, Any]:
         limit = _clean_limit(limit, 1, 200)
         params: list[Any] = []
@@ -538,6 +665,28 @@ class NutritionService:
             "table": ascii_table(entries, totals),
         }
 
+    def _days_with_entries(
+        self,
+        conn: sqlite3.Connection,
+        from_date: str,
+        to_date: str,
+    ) -> list[dict[str, Any]]:
+        start = _parse_date(from_date)
+        end = _parse_date(to_date)
+        days = []
+        current = start
+        while current <= end:
+            day = self._get_day_with_conn(conn, current.isoformat())
+            days.append(
+                {
+                    "date": day["date"],
+                    "entry_count": len(day["entries"]),
+                    "totals": day["totals"],
+                }
+            )
+            current += timedelta(days=1)
+        return days
+
     def _date_time(self, date: str | None, time: str | None) -> tuple[str, str]:
         current = local_now(self.settings.timezone)
         date_value = date or current.date().isoformat()
@@ -546,12 +695,29 @@ class NutritionService:
         _require_text(time_value, "time")
         return date_value, time_value
 
+    def _date_value(self, date: str | None) -> Date:
+        current = local_now(self.settings.timezone)
+        date_value = date or current.date().isoformat()
+        return _parse_date(date_value)
+
+    def _date_range(self, from_date: str | None, to_date: str | None) -> tuple[str, str]:
+        current = local_now(self.settings.timezone).date().isoformat()
+        from_value = from_date or to_date or current
+        to_value = to_date or from_date or current
+        start = _parse_date(from_value)
+        end = _parse_date(to_value)
+        if start > end:
+            raise ValueError("from_date must be on or before to_date.")
+        return from_value, to_value
+
 
 def register_tools(mcp: Any, service: NutritionService) -> None:
     mcp.tool()(service.add_food)
     mcp.tool()(service.update_food)
     mcp.tool()(service.add_alias)
     mcp.tool()(service.search_foods)
+    mcp.tool()(service.get_food)
+    mcp.tool()(service.list_foods)
     mcp.tool()(service.add_recipe)
     mcp.tool()(service.update_recipe)
     mcp.tool()(service.get_recipe)
@@ -559,9 +725,13 @@ def register_tools(mcp: Any, service: NutritionService) -> None:
     mcp.tool()(service.log_food)
     mcp.tool()(service.log_recipe)
     mcp.tool()(service.get_day)
+    mcp.tool()(service.get_entries)
     mcp.tool()(service.delete_entry)
+    mcp.tool()(service.delete_food)
+    mcp.tool()(service.delete_recipe)
     mcp.tool()(service.update_entry)
     mcp.tool()(service.finalize_day)
+    mcp.tool()(service.get_weekly_report)
     mcp.tool()(service.list_aliases)
     mcp.tool()(service.health)
 
@@ -832,6 +1002,14 @@ def _get_entry(conn: sqlite3.Connection, entry_id: int) -> dict[str, Any]:
     return _entry_to_dict(row)
 
 
+def _count_rows(conn: sqlite3.Connection, table: str, column: str, value: int) -> int:
+    row = conn.execute(
+        f"SELECT COUNT(*) AS count FROM {table} WHERE {column} = ?",
+        (value,),
+    ).fetchone()
+    return int(row["count"])
+
+
 def _entry_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     entry = dict(row)
     snapshot = entry.get("recipe_components_snapshot")
@@ -901,6 +1079,11 @@ def _validate_date(value: str) -> None:
         raise ValueError("date must be YYYY-MM-DD.") from exc
     if parsed.date().isoformat() != value:
         raise ValueError("date must be YYYY-MM-DD.")
+
+
+def _parse_date(value: str) -> Date:
+    _validate_date(value)
+    return datetime.strptime(value, "%Y-%m-%d").date()
 
 
 def _require_text(value: str, field: str) -> None:

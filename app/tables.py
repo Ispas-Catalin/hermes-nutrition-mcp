@@ -120,3 +120,87 @@ def markdown_table(entries: list[dict[str, Any]], totals: dict[str, float]) -> s
     )
     return "\n".join(lines)
 
+
+def foods_table(foods: list[dict[str, Any]]) -> str:
+    headers = ["ID", "Food", "Aliases", "kcal", "Protein", "Carbs", "Fat"]
+    rows = []
+    for food in foods:
+        aliases = ", ".join(alias["alias"] for alias in food.get("aliases", []))
+        rows.append(
+            [
+                str(food["id"]),
+                truncate(str(food["name"]), 22),
+                truncate(aliases, 24),
+                str(round(float(food["kcal"]))),
+                format_macro(float(food["protein_g"])),
+                format_macro(float(food["carbs_g"])),
+                format_macro(float(food["fat_g"])),
+            ]
+        )
+    if not rows:
+        rows = [["", "(none)", "", "", "", "", ""]]
+    max_widths = [5, 22, 24, 7, 9, 7, 6]
+    widths = []
+    for index, header in enumerate(headers):
+        content_width = max([len(header), *(len(row[index]) for row in rows)])
+        widths.append(min(max_widths[index], content_width))
+
+    def border() -> str:
+        return "+" + "+".join("-" * (width + 2) for width in widths) + "+"
+
+    def fmt(row: list[str]) -> str:
+        return "|" + "|".join(
+            f" {truncate(value, width).ljust(width)} "
+            for value, width in zip(row, widths, strict=True)
+        ) + "|"
+
+    return "\n".join([border(), fmt(headers), border(), *(fmt(row) for row in rows), border()])
+
+
+def daily_totals_table(days: list[dict[str, Any]], total_label: str = "TOTAL") -> str:
+    headers = ["Date", "kcal", "Protein", "Carbs", "Fat", "Fiber"]
+    rows = []
+    for day in days:
+        totals = day["totals"]
+        rows.append(
+            [
+                day["date"],
+                str(round(float(totals["kcal"]))),
+                format_macro(float(totals["protein_g"])),
+                format_macro(float(totals["carbs_g"])),
+                format_macro(float(totals["fat_g"])),
+                format_macro(float(totals["fiber_g"])),
+            ]
+        )
+    grand_totals = {
+        "kcal": sum(float(day["totals"]["kcal"]) for day in days),
+        "protein_g": sum(float(day["totals"]["protein_g"]) for day in days),
+        "carbs_g": sum(float(day["totals"]["carbs_g"]) for day in days),
+        "fat_g": sum(float(day["totals"]["fat_g"]) for day in days),
+        "fiber_g": sum(float(day["totals"]["fiber_g"]) for day in days),
+    }
+    total_row = [
+        total_label,
+        str(round(float(grand_totals["kcal"]))),
+        format_macro(float(grand_totals["protein_g"])),
+        format_macro(float(grand_totals["carbs_g"])),
+        format_macro(float(grand_totals["fat_g"])),
+        format_macro(float(grand_totals["fiber_g"])),
+    ]
+    all_rows = rows + [total_row]
+    widths = []
+    for index, header in enumerate(headers):
+        widths.append(max(len(header), *(len(row[index]) for row in all_rows)))
+
+    def border() -> str:
+        return "+" + "+".join("-" * (width + 2) for width in widths) + "+"
+
+    def fmt(row: list[str]) -> str:
+        return "|" + "|".join(
+            f" {value.ljust(width)} "
+            for value, width in zip(row, widths, strict=True)
+        ) + "|"
+
+    return "\n".join(
+        [border(), fmt(headers), border(), *(fmt(row) for row in rows), border(), fmt(total_row), border()]
+    )

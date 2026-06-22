@@ -14,13 +14,21 @@ from app.config import Settings
 from app.tools import NutritionService, register_tools
 
 
-def create_mcp_server(service: NutritionService) -> Any:
+def create_mcp_server(service: NutritionService, settings: Settings) -> Any:
     from mcp.server.fastmcp import FastMCP
+    from mcp.server.transport_security import TransportSecuritySettings
 
     mcp = FastMCP(
         "nutrition-mcp",
+        host=settings.host,
+        port=settings.port,
         json_response=True,
         streamable_http_path="/",
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=settings.mcp_allowed_hosts,
+            allowed_origins=settings.mcp_allowed_origins,
+        ),
         instructions=(
             "Use these tools to store and retrieve nutrition data. "
             "Foods, aliases, recipes, and meal logs live in SQLite; do not store macros in memory."
@@ -33,7 +41,7 @@ def create_mcp_server(service: NutritionService) -> Any:
 def create_app(settings: Settings | None = None) -> Starlette:
     settings = settings or Settings.from_env()
     service = NutritionService(settings)
-    mcp = create_mcp_server(service)
+    mcp = create_mcp_server(service, settings)
 
     async def homepage(_request: Any) -> PlainTextResponse:
         return PlainTextResponse("nutrition-mcp is running\n")

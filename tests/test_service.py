@@ -66,12 +66,42 @@ def test_log_food_by_food_id(seeded_service: NutritionService) -> None:
     assert result["day"]["totals"]["kcal"] == 180
 
 
+def test_get_food_by_alias(seeded_service: NutritionService) -> None:
+    result = seeded_service.get_food(alias="babybel")
+    assert result["food"]["name"] == "Babybel"
+    assert result["food"]["aliases"][0]["normalized_alias"] == "babybel"
+    assert result["matched_alias"]["alias"] == "babybel"
+
+
+def test_list_foods_without_query(seeded_service: NutritionService) -> None:
+    result = seeded_service.list_foods()
+    assert [food["name"] for food in result["foods"]] == ["Babybel", "Greek yogurt"]
+    assert "Babybel" in result["table"]
+    assert "greek yogurt" in result["table"]
+
+
 def test_get_day_totals(seeded_service: NutritionService) -> None:
     seeded_service.log_food(alias="babybel", quantity=2, date="2026-06-22", time="10:00")
     seeded_service.log_food(alias="greek yogurt", quantity=1, date="2026-06-22", time="11:00")
     day = seeded_service.get_day(date="2026-06-22")
     assert day["totals"]["kcal"] == 320
     assert day["totals"]["protein_g"] == 30
+
+
+def test_get_entries_range(seeded_service: NutritionService) -> None:
+    seeded_service.log_food(alias="babybel", quantity=1, date="2026-06-22", time="10:00")
+    seeded_service.log_food(alias="greek yogurt", quantity=1, date="2026-06-23", time="11:00")
+    seeded_service.log_food(alias="babybel", quantity=3, date="2026-06-25", time="12:00")
+    result = seeded_service.get_entries(from_date="2026-06-22", to_date="2026-06-23")
+    assert len(result["entries"]) == 2
+    assert result["totals"]["kcal"] == 250
+    assert [day["date"] for day in result["days"]] == ["2026-06-22", "2026-06-23"]
+    assert "2026-06-22" in result["daily_table"]
+
+
+def test_get_entries_validates_range(seeded_service: NutritionService) -> None:
+    with pytest.raises(ValueError, match="from_date"):
+        seeded_service.get_entries(from_date="2026-06-24", to_date="2026-06-23")
 
 
 def test_update_entry(seeded_service: NutritionService) -> None:
@@ -88,6 +118,26 @@ def test_delete_entry(seeded_service: NutritionService) -> None:
     assert deleted["deleted_entry_id"] == result["entry"]["id"]
     assert deleted["day"]["entries"] == []
     assert deleted["day"]["totals"]["kcal"] == 0
+
+
+def test_delete_unused_food(service: NutritionService) -> None:
+    result = service.add_food(
+        name="Typo food",
+        kcal=10,
+        protein_g=1,
+        carbs_g=1,
+        fat_g=1,
+        aliases=["typo food"],
+    )
+    deleted = service.delete_food(result["food"]["id"])
+    assert deleted["deleted_food"]["name"] == "Typo food"
+    assert service.list_foods()["foods"] == []
+
+
+def test_delete_logged_food_is_blocked(seeded_service: NutritionService) -> None:
+    seeded_service.log_food(alias="babybel", quantity=1, date="2026-06-22")
+    with pytest.raises(ValueError, match="logged entries"):
+        seeded_service.delete_food(1)
 
 
 def test_finalize_day_exports(seeded_service: NutritionService) -> None:
@@ -167,3 +217,56 @@ def test_recipe_with_adjustment(service: NutritionService) -> None:
     assert logged["entry"]["kcal_snapshot"] == pytest.approx(664.5)
     assert len(logged["entry"]["recipe_components"]) == 3
 
+
+def test_delete_unused_recipe(service: NutritionService) -> None:
+    service.add_food(
+        name="Cheese",
+        serving_name="100 g",
+        grams_per_serving=100,
+        kcal=300,
+        protein_g=25,
+        carbs_g=2,
+        fat_g=22,
+        aliases=["cheese"],
+    )
+    recipe = service.add_recipe(
+        name="Cheese snack",
+        aliases=["cheese snack"],
+        ingredients=[{"alias": "cheese", "grams": 30}],
+    )
+    deleted = service.delete_recipe(recipe["recipe"]["id"])
+    assert deleted["deleted_recipe"]["name"] == "Cheese snack"
+    assert service.search_recipes("cheese snack")["recipes"] == []
+
+
+def test_delete_logged_recipe_is_blocked(service: NutritionService) -> None:
+    service.add_food(
+        name="Cheese",
+        serving_name="100 g",
+        grams_per_serving=100,
+        kcal=300,
+        protein_g=25,
+        carbs_g=2,
+        fat_g=22,
+        aliases=["cheese"],
+    )
+    recipe = service.add_recipe(
+        name="Cheese snack",
+        aliases=["cheese snack"],
+        ingredients=[{"alias": "cheese", "grams": 30}],
+    )
+    service.log_recipe(alias="cheese snack", date="2026-06-22")
+    with pytest.raises(ValueError, match="logged entries"):
+        service.delete_recipe(recipe["recipe"]["id"])
+
+
+def test_weekly_report_uses_monday_to_sunday(seeded_service: NutritionService) -> None:
+    seeded_service.log_food(alias="babybel", quantity=1, date="2026-06-22")
+    seeded_service.log_food(alias="greek yogurt", quantity=1, date="2026-06-28")
+    seeded_service.log_food(alias="babybel", quantity=10, date="2026-06-29")
+    report = seeded_service.get_weekly_report(date="2026-06-24")
+    assert report["week_start"] == "2026-06-22"
+    assert report["week_end"] == "2026-06-28"
+    assert report["totals"]["kcal"] == 250
+    assert len(report["days"]) == 7
+    assert "WEEK" in report["daily_table"]

@@ -46,12 +46,17 @@ Core tools:
 - `add_food`
 - `update_food`
 - `add_alias`
+- `get_food`
 - `search_foods`
+- `list_foods`
 - `log_food`
 - `get_day`
+- `get_entries`
 - `delete_entry`
+- `delete_food`
 - `update_entry`
 - `finalize_day`
+- `get_weekly_report`
 - `list_aliases`
 - `health`
 
@@ -62,6 +67,7 @@ Recipe tools:
 - `get_recipe`
 - `search_recipes`
 - `log_recipe`
+- `delete_recipe`
 
 ## Data Paths
 
@@ -151,7 +157,7 @@ Example recipe ingredients use grams when the food has `grams_per_serving`:
 Build:
 
 ```bash
-docker build -t nutrition-mcp:0.1.0 .
+docker build -t nutrition-mcp:0.2.0 .
 ```
 
 Run:
@@ -162,8 +168,9 @@ docker run -d \
   -p 8765:8765 \
   -e TZ=Europe/Bucharest \
   -e MCP_TOKEN=change-me \
+  -e PUBLIC_HOSTS=192.168.1.142,nutrition-mcp \
   -v /mnt/user/appdata/nutrition-mcp:/data \
-  nutrition-mcp:0.1.0
+  nutrition-mcp:0.2.0
 ```
 
 For a published image:
@@ -174,20 +181,22 @@ docker run -d \
   -p 8765:8765 \
   -e TZ=Europe/Bucharest \
   -e MCP_TOKEN=change-me \
+  -e PUBLIC_HOSTS=192.168.1.142,nutrition-mcp \
   -v /mnt/user/appdata/nutrition-mcp:/data \
-  ghcr.io/REPLACE_ME/nutrition-mcp:0.1.0
+  ghcr.io/REPLACE_ME/nutrition-mcp:0.2.0
 ```
 
 ## Unraid Add Container
 
 - Name: `nutrition-mcp`
-- Repository: `ghcr.io/REPLACE_ME/nutrition-mcp:0.1.0`
+- Repository: `ghcr.io/REPLACE_ME/nutrition-mcp:0.2.0`
 - Network Type: `bridge`
 - Port: host `8765` -> container `8765` TCP
 - Path: `/mnt/user/appdata/nutrition-mcp` -> `/data`
 - Env:
   - `TZ=Europe/Bucharest`
   - `MCP_TOKEN=<long random token>`
+  - `PUBLIC_HOSTS=192.168.1.142,nutrition-mcp`
 - WebUI: `http://[IP]:[PORT:8765]/`
 
 ## Hermes MCP Config
@@ -218,6 +227,7 @@ mcp_servers:
 DATA_DIR=/data
 TZ=Europe/Bucharest
 MCP_TOKEN=
+PUBLIC_HOSTS=192.168.1.142,nutrition-mcp
 HOST=0.0.0.0
 PORT=8765
 ```
@@ -229,4 +239,3 @@ PORT=8765
 - No arbitrary SQL tool is exposed.
 - Deletes require an exact meal `entry_id`.
 - Historical entries keep snapshots when foods or recipes are updated.
-
